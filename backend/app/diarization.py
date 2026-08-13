@@ -45,8 +45,8 @@ class SegmentSpeakerTracker:
         min_segment: float = 0.4,
         min_new: float = 1.5,
         max_speakers: int = 2,
-        sticky: float = 0.15,
-        switch_margin: float = 0.12,
+        sticky: float = 0.10,
+        switch_margin: float = 0.08,
     ) -> None:
         import sherpa_onnx
 
@@ -58,6 +58,10 @@ class SegmentSpeakerTracker:
         self.max_speakers = max_speakers
         self.sticky = sticky
         self.switch_margin = switch_margin
+        # IMPORTANT: do NOT force num_clusters=max_speakers on each window.
+        # That invents a fake second voice inside single-speaker stretches
+        # (see result.log: "Четыре, пять. Давай, говори." → Speakers 2).
+        # Global tracker already caps at max_speakers.
         self._diar = sherpa_onnx.OfflineSpeakerDiarization(
             sherpa_onnx.OfflineSpeakerDiarizationConfig(
                 segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
@@ -69,11 +73,11 @@ class SegmentSpeakerTracker:
                     model=str(emb_model)
                 ),
                 clustering=sherpa_onnx.FastClusteringConfig(
-                    num_clusters=max_speakers if max_speakers > 0 else -1,
+                    num_clusters=-1,
                     threshold=0.8,
                 ),
-                min_duration_on=0.3,
-                min_duration_off=0.5,
+                min_duration_on=0.25,
+                min_duration_off=0.3,
             )
         )
         self._ex = sherpa_onnx.SpeakerEmbeddingExtractor(
@@ -102,54 +106,64 @@ class SegmentSpeakerTracker:
     def _assign(
         self, emb: np.ndarray, seconds: float, update: bool = True
     ) -> int | None:
-        """Return 0-based speaker index with sticky hysteresis."""
+        """Return 0-based speaker index.
+
+        When only Speakers 1 exists, open Speakers 2 if cosine to Speakers 1
+        is below match threshold and the span is long enough. Do not sticky-
+        return Speakers 1 before that check (regression in result2.log).
+        """
         if not self._centroids:
             if update:
                 self._centroids.append(emb)
                 self._counts.append(1)
+            else:
+                # First voice in a partial: still report Speakers 1 without training.
+                pass
             return 0
 
         sims = [float(np.dot(emb, c)) for c in self._centroids]
-        cur = (self._last - 1) if self._last else None
+        cur = (self._last - 1) if self._last and self._last - 1 < len(self._centroids) else None
         cur_sim = sims[cur] if cur is not None else -1.0
         best = int(np.argmax(sims))
+        best_sim = sims[best]
 
-        # 1) Keep current speaker when still close enough.
-        if cur is not None and cur_sim >= self.threshold - self.sticky:
-            if update:
-                self._update(cur, emb)
-            return cur
-
-        # 2) Switch to another known voice only with a clear relative margin.
-        if (
-            best != cur
-            and sims[best] >= self.threshold
-            and sims[best] - max(cur_sim, 0.0) >= self.switch_margin
-        ):
-            if update:
+        # --- Both speakers known ---
+        if len(self._centroids) >= self.max_speakers:
+            if cur is not None and best != cur:
+                if best_sim - cur_sim >= self.switch_margin and best_sim >= 0.35:
+                    if update:
+                        self._update(best, emb)
+                    return best
+                if abs(best_sim - cur_sim) < self.switch_margin:
+                    if update and cur_sim >= 0.35:
+                        self._update(cur, emb)
+                    return cur
+            if update and best_sim >= 0.35:
                 self._update(best, emb)
-            return best
+            return best if best_sim >= 0.30 else (cur if cur is not None else best)
 
-        # 3) New speaker: must be far from all known voices and long enough.
-        if (
-            max(sims) < self.threshold - 0.08
-            and seconds >= self.min_new
-            and len(self._centroids) < self.max_speakers
-        ):
-            if update:
-                self._centroids.append(emb)
-                self._counts.append(1)
-                return len(self._centroids) - 1
-            return len(self._centroids)  # provisional index if we were updating
+        # --- Only Speakers 1 known ---
+        sim1 = sims[0]
 
-        # 4) Ambiguous → stick to current / best known.
-        if cur is not None:
-            return cur
-        if sims[best] >= self.threshold - self.sticky:
+        # Strong match → Speakers 1
+        if sim1 >= self.threshold:
             if update:
-                self._update(best, emb)
-            return best
-        return None
+                self._update(0, emb)
+            return 0
+
+        # Not a match to Speakers 1 → open Speakers 2
+        create_min = 0.55 if sim1 < 0.45 else self.min_new
+        if seconds >= create_min and len(self._centroids) < self.max_speakers:
+            # Always register the new centroid (even during partial), otherwise
+            # provisional Speakers 2 breaks _last / sims indexing.
+            self._centroids.append(emb)
+            self._counts.append(1)
+            return len(self._centroids) - 1
+
+        # Short / ambiguous → stay Speakers 1
+        if update and sim1 >= 0.35:
+            self._update(0, emb)
+        return 0
 
     def label_spans(
         self, chunk: np.ndarray, update_centroids: bool = True
@@ -227,7 +241,9 @@ class DiarizationService:
         self.seg_path = Path(os.getenv("DIAR_SEG_MODEL", "/data/diar/segmentation.onnx"))
         self.max_speakers = int(os.getenv("DIAR_MAX_SPEAKERS", "2"))
         self.threshold = float(os.getenv("DIAR_THRESHOLD", "0.62"))
-        self.min_new = float(os.getenv("DIAR_MIN_NEW_SEC", "1.5"))
+        self.min_new = float(os.getenv("DIAR_MIN_NEW_SEC", "0.8"))
+        self.switch_margin = float(os.getenv("DIAR_SWITCH_MARGIN", "0.08"))
+        self.sticky = float(os.getenv("DIAR_STICKY", "0.08"))
         self._ready = False
         self._error = ""
         self._mode = "disabled"
@@ -241,6 +257,8 @@ class DiarizationService:
             "max_speakers": self.max_speakers,
             "threshold": self.threshold,
             "min_new_sec": self.min_new,
+            "switch_margin": self.switch_margin,
+            "sticky": self.sticky,
             "embedding_model": str(self.emb_path),
             "segmentation_model": str(self.seg_path),
             "error": self._error,
@@ -288,6 +306,8 @@ class DiarizationService:
             threshold=self.threshold,
             max_speakers=self.max_speakers,
             min_new=self.min_new,
+            switch_margin=self.switch_margin,
+            sticky=self.sticky,
         )
 
 
