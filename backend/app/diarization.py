@@ -79,7 +79,7 @@ class SegmentSpeakerTracker:
                     threshold=0.8,
                 ),
                 min_duration_on=0.25,
-                min_duration_off=0.3,
+                min_duration_off=0.45,
             )
         )
         self._ex = sherpa_onnx.SpeakerEmbeddingExtractor(
@@ -140,8 +140,15 @@ class SegmentSpeakerTracker:
         if len(self._centroids) >= self.max_speakers:
             other = 1 - cur if cur is not None else best
             other_sim = sims[other] if 0 <= other < len(sims) else -1.0
-            # After a pause, bias toward the other speaker (Q→A turn taking).
-            if cur is not None and gap_before >= self.turn_gap:
+            # After a real intra-chunk pause, bias toward the other speaker.
+            # Skip tiny fragments ("...пос" / "Смотреть") — those are split words,
+            # not answers (see result4.log).
+            min_turn = 0.7
+            if (
+                cur is not None
+                and gap_before >= self.turn_gap
+                and seconds >= min_turn
+            ):
                 if other_sim + 0.04 >= cur_sim and other_sim >= 0.30:
                     if update:
                         self._update(other, emb)
@@ -217,6 +224,9 @@ class SegmentSpeakerTracker:
             if emb is None:
                 continue
             gap_before = max(0.0, start - prev_end)
+            # Offset from t=0 is the analysis window start, not a speaker pause.
+            if not spans:
+                gap_before = 0.0
             who = self._assign(
                 emb, seconds, update=update_centroids, gap_before=gap_before
             )
@@ -230,7 +240,37 @@ class SegmentSpeakerTracker:
             spans.append((start, end, speaker))
             prev_end = end
 
-        return self._merge_spans(spans)
+        return self._merge_spans(self._absorb_fragments(spans))
+
+    def _absorb_fragments(
+        self,
+        spans: list[tuple[float, float, int]],
+        max_frag: float = 0.65,
+        max_gap: float = 0.40,
+    ) -> list[tuple[float, float, int]]:
+        """Reattach a short leftover syllable to the previous speaker.
+
+        Pattern in result4.log: Speakers 1 '...в сторону пос...' then a 0.3s
+        'Смотреть' labeled Speakers 2, then the real Speakers 2 reply.
+        A genuine short answer ('Нет.') usually has a larger gap after the question.
+        """
+        if len(spans) < 2:
+            return spans
+        out = [spans[0]]
+        for start, end, speaker in spans[1:]:
+            prev_start, prev_end, prev_speaker = out[-1]
+            dur = end - start
+            gap = start - prev_end
+            if (
+                speaker != prev_speaker
+                and dur <= max_frag
+                and 0 <= gap <= max_gap
+            ):
+                out[-1] = (prev_start, end, prev_speaker)
+                self._last = prev_speaker
+                continue
+            out.append((start, end, speaker))
+        return out
 
     def _merge_spans(
         self, spans: list[tuple[float, float, int]], gap: float = 0.35
