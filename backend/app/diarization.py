@@ -47,6 +47,7 @@ class SegmentSpeakerTracker:
         max_speakers: int = 2,
         sticky: float = 0.10,
         switch_margin: float = 0.08,
+        turn_gap: float = 0.35,
     ) -> None:
         import sherpa_onnx
 
@@ -58,6 +59,7 @@ class SegmentSpeakerTracker:
         self.max_speakers = max_speakers
         self.sticky = sticky
         self.switch_margin = switch_margin
+        self.turn_gap = turn_gap
         # IMPORTANT: do NOT force num_clusters=max_speakers on each window.
         # That invents a fake second voice inside single-speaker stretches
         # (see result.log: "Четыре, пять. Давай, говори." → Speakers 2).
@@ -104,13 +106,20 @@ class SegmentSpeakerTracker:
         self._counts[index] += 1
 
     def _assign(
-        self, emb: np.ndarray, seconds: float, update: bool = True
+        self,
+        emb: np.ndarray,
+        seconds: float,
+        update: bool = True,
+        gap_before: float = 0.0,
     ) -> int | None:
         """Return 0-based speaker index.
 
         When only Speakers 1 exists, open Speakers 2 if cosine to Speakers 1
         is below match threshold and the span is long enough. Do not sticky-
         return Speakers 1 before that check (regression in result2.log).
+
+        When both voices are known, a pause before the span is treated as a
+        turn change: keep the previous speaker only if they are clearly closer.
         """
         if not self._centroids:
             if update:
@@ -129,12 +138,25 @@ class SegmentSpeakerTracker:
 
         # --- Both speakers known ---
         if len(self._centroids) >= self.max_speakers:
+            other = 1 - cur if cur is not None else best
+            other_sim = sims[other] if 0 <= other < len(sims) else -1.0
+            # After a pause, bias toward the other speaker (Q→A turn taking).
+            if cur is not None and gap_before >= self.turn_gap:
+                if other_sim + 0.04 >= cur_sim and other_sim >= 0.30:
+                    if update:
+                        self._update(other, emb)
+                    return other
+                # Keep current only if they clearly win.
+                if cur_sim - other_sim >= self.switch_margin:
+                    if update and cur_sim >= 0.35:
+                        self._update(cur, emb)
+                    return cur
             if cur is not None and best != cur:
-                if best_sim - cur_sim >= self.switch_margin and best_sim >= 0.35:
+                if best_sim >= cur_sim and best_sim >= 0.30:
                     if update:
                         self._update(best, emb)
                     return best
-                if abs(best_sim - cur_sim) < self.switch_margin:
+                if cur_sim - best_sim >= self.switch_margin:
                     if update and cur_sim >= 0.35:
                         self._update(cur, emb)
                     return cur
@@ -182,6 +204,7 @@ class SegmentSpeakerTracker:
             return []
 
         spans: list[tuple[float, float, int]] = []
+        prev_end = 0.0
         for seg in segments:
             start = float(seg.start)
             end = float(seg.end)
@@ -193,14 +216,19 @@ class SegmentSpeakerTracker:
             emb = self._embed(piece)
             if emb is None:
                 continue
-            who = self._assign(emb, seconds, update=update_centroids)
+            gap_before = max(0.0, start - prev_end)
+            who = self._assign(
+                emb, seconds, update=update_centroids, gap_before=gap_before
+            )
             if who is None:
                 if self._last is not None:
                     spans.append((start, end, self._last))
+                    prev_end = end
                 continue
             speaker = who + 1
             self._last = speaker
             spans.append((start, end, speaker))
+            prev_end = end
 
         return self._merge_spans(spans)
 
@@ -244,6 +272,7 @@ class DiarizationService:
         self.min_new = float(os.getenv("DIAR_MIN_NEW_SEC", "0.8"))
         self.switch_margin = float(os.getenv("DIAR_SWITCH_MARGIN", "0.08"))
         self.sticky = float(os.getenv("DIAR_STICKY", "0.08"))
+        self.turn_gap = float(os.getenv("DIAR_TURN_GAP", "0.35"))
         self._ready = False
         self._error = ""
         self._mode = "disabled"
@@ -259,6 +288,7 @@ class DiarizationService:
             "min_new_sec": self.min_new,
             "switch_margin": self.switch_margin,
             "sticky": self.sticky,
+            "turn_gap": self.turn_gap,
             "embedding_model": str(self.emb_path),
             "segmentation_model": str(self.seg_path),
             "error": self._error,
@@ -308,6 +338,7 @@ class DiarizationService:
             min_new=self.min_new,
             switch_margin=self.switch_margin,
             sticky=self.sticky,
+            turn_gap=self.turn_gap,
         )
 
 
