@@ -42,7 +42,13 @@ docker-compose up --build
 - `POST /transcribe` — multipart file upload (webm/wav и др.)
 - `WebSocket /ws/stream` — pseudo-streaming (re-transcription буфера)
 
-## Ограничения
+## Диаризация (только streaming)
+
+Как у [Charoite](https://github.com/charoiteai/Charoite_audio): не Silero VAD, а
+**pyannote segmentation + ERes2Net** через `sherpa-onnx`, до **2 спикеров**.
+
+Модели лежат в `./data/diar/` (~44 MB). В UI: режим «Потоковый + диаризация» →
+метки `Спикер 1/2`.
 
 - `transcribe`: до **25 с** на чанк; длинное аудио режется на 25-секундные фрагменты.
 - Макс. длина: **60 с** (`MAX_AUDIO_SECONDS`).

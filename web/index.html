@@ -10,7 +10,7 @@
   <main class="container">
     <header>
       <h1>GigaAM Voice Recognition</h1>
-      <p class="subtitle">Модель <code>ai-sage/GigaAM-v3</code> (e2e_rnnt), CPU</p>
+      <p class="subtitle">Модель <code>v3_e2e_rnnt</code>, CPU · live diarization до 2 спикеров</p>
     </header>
 
     <section class="status-card" id="statusCard">
@@ -26,7 +26,7 @@
         </label>
         <label>
           <input type="radio" name="mode" value="stream" />
-          Потоковый (pseudo-streaming)
+          Потоковый + диаризация
         </label>
       </div>
 
@@ -49,14 +49,15 @@
 
     <section class="result">
       <h2>Результат</h2>
+      <div id="resultUtterances" class="utterances hidden"></div>
       <pre id="resultText">—</pre>
       <p id="timingText" class="meta"></p>
     </section>
 
     <footer>
       <p>
-        Потоковый режим: скользящие сегменты ~20 с (нативный streaming в публичном API недоступен).
-        Модель GigaAM-v3 ориентирована на русский; английский распознаётся хуже.
+        Поток: ASR сегментами ~20 с. Диаризация как у Charoite —
+        pyannote segmentation + ERes2Net (до 2 спикеров). Batch без диаризации.
       </p>
     </footer>
   </main>

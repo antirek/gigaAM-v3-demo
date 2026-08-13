@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.audio_utils import cleanup_paths, convert_to_wav, save_upload_to_temp
+from app.diarization import diarization_service
 from app.model import ModelState, gigaam_service
 from app.streaming import StreamSession
 
@@ -18,9 +19,14 @@ logger = logging.getLogger(__name__)
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 
+def _load_services() -> None:
+    gigaam_service.load()
+    diarization_service.load()
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    thread = threading.Thread(target=gigaam_service.load, daemon=True)
+    thread = threading.Thread(target=_load_services, daemon=True)
     thread.start()
     yield
 
@@ -51,6 +57,7 @@ async def health():
         "max_audio_seconds": gigaam_service.max_audio_seconds,
         "streaming_native": False,
         "streaming_mode": "pseudo_streaming",
+        "diarization": diarization_service.status,
     }
 
 
@@ -93,7 +100,7 @@ async def stream_transcribe(websocket: WebSocket):
         await websocket.close()
         return
 
-    session = StreamSession(gigaam_service)
+    session = StreamSession(gigaam_service, diarization_service)
     try:
         while True:
             message = await websocket.receive()

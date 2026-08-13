@@ -9,8 +9,11 @@ services:
       - .env.example
     environment:
       GIGAAM_CACHE: /data/gigaam
+      DIAR_EMB_MODEL: /data/diar/embedding.onnx
+      DIAR_SEG_MODEL: /data/diar/segmentation.onnx
     volumes:
       - ./data/gigaam:/data/gigaam
+      - ./data/diar:/data/diar
     deploy:
       resources:
         limits:
