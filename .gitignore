@@ -1,0 +1,9 @@
+data/gigaam/
+data/tmp/
+*.wav
+*.webm
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/

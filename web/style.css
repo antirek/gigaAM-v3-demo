@@ -1,0 +1,117 @@
+:root {
+  --bg: #0f1419;
+  --card: #1a2332;
+  --text: #e8edf4;
+  --muted: #8b9bb4;
+  --accent: #3d8bfd;
+  --ok: #3ecf8e;
+  --warn: #f5a623;
+  --err: #ff6b6b;
+  --border: #2a3648;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: radial-gradient(circle at top, #1a2740, var(--bg));
+  color: var(--text);
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2rem 1rem 3rem;
+}
+
+h1 { margin: 0 0 0.25rem; font-size: 1.75rem; }
+.subtitle { color: var(--muted); margin: 0; }
+
+.status-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  margin: 1.5rem 0;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+
+.status-dot.ready { background: var(--ok); }
+.status-dot.error { background: var(--err); }
+
+.controls, .preview, .result {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.mode-toggle {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.btn {
+  border: 1px solid var(--border);
+  background: #243044;
+  color: var(--text);
+  padding: 0.55rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn.primary { background: var(--accent); border-color: var(--accent); }
+.btn.accent { background: #2a9d8f; border-color: #2a9d8f; }
+
+.file-upload {
+  display: block;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.file-upload input { margin-top: 0.5rem; }
+
+audio { width: 100%; margin-top: 0.5rem; }
+
+.meta { color: var(--muted); font-size: 0.9rem; margin: 0.5rem 0 0; }
+
+#resultText {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #111827;
+  border-radius: 8px;
+  padding: 1rem;
+  min-height: 4rem;
+  border: 1px solid var(--border);
+}
+
+footer {
+  color: var(--muted);
+  font-size: 0.85rem;
+}

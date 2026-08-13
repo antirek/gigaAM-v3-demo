@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GigaAM — распознавание речи</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>GigaAM Voice Recognition</h1>
+      <p class="subtitle">Модель <code>ai-sage/GigaAM-v3</code> (e2e_rnnt), CPU</p>
+    </header>
+
+    <section class="status-card" id="statusCard">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">Проверка API...</span>
+    </section>
+
+    <section class="controls">
+      <div class="mode-toggle">
+        <label>
+          <input type="radio" name="mode" value="batch" checked />
+          Batch (запись → отправка)
+        </label>
+        <label>
+          <input type="radio" name="mode" value="stream" />
+          Потоковый (pseudo-streaming)
+        </label>
+      </div>
+
+      <div class="buttons">
+        <button id="recordBtn" class="btn primary" disabled>Записать</button>
+        <button id="stopBtn" class="btn" disabled>Стоп</button>
+        <button id="sendBtn" class="btn accent" disabled>Отправить</button>
+      </div>
+
+      <label class="file-upload">
+        Или загрузить файл
+        <input type="file" id="fileInput" accept="audio/*" />
+      </label>
+    </section>
+
+    <section class="preview">
+      <audio id="audioPreview" controls></audio>
+      <p id="metaText" class="meta"></p>
+    </section>
+
+    <section class="result">
+      <h2>Результат</h2>
+      <pre id="resultText">—</pre>
+      <p id="timingText" class="meta"></p>
+    </section>
+
+    <footer>
+      <p>
+        Потоковый режим: скользящие сегменты ~20 с (нативный streaming в публичном API недоступен).
+        Модель GigaAM-v3 ориентирована на русский; английский распознаётся хуже.
+      </p>
+    </footer>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
