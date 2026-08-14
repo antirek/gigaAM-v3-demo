@@ -1,6 +1,4 @@
-data/gigaam/
-data/diar/
-data/tmp/
+data/
 *.wav
 *.webm
 .env
