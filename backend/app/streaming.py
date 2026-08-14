@@ -148,13 +148,18 @@ class StreamSession:
         if utterances:
             return self._merge_utterances(utterances)
 
-        # Fallback: whole window, keep last known speaker.
+        # No diarization spans: still ASR the window, but do not invent Speakers 1.
         text = self._transcribe_range(wav_path, start, end)
         if not text:
             return []
+        speaker = None
+        # Sherpa usually has a sticky last speaker; diart empty ≠ Speakers 1.
+        backend = getattr(self.diar_service, "backend", "") if self.diar_service else ""
+        if backend == "sherpa" and self.tracker is not None:
+            speaker = getattr(self.tracker, "last_speaker", None)
         return [
             {
-                "speaker": self.tracker._last if self.tracker else None,
+                "speaker": speaker,
                 "text": text,
                 "start_s": round(start, 2),
                 "end_s": round(end, 2),
@@ -187,9 +192,11 @@ class StreamSession:
             "speakers_count": self.tracker.voices if self.tracker else 0,
             "diarization": bool(self.tracker),
             "mode": "pseudo_streaming",
-            "note": "Per-span ASR + Charoite-style live diarization"
-            if self.tracker
-            else "Sliding-segment pseudo-streaming (diarization off)",
+            "note": (
+                f"Per-span ASR + live diarization ({self.diar_service.backend})"
+                if self.tracker and self.diar_service
+                else "Sliding-segment pseudo-streaming (diarization off)"
+            ),
         }
 
     def transcribe_partial(self) -> dict | None:

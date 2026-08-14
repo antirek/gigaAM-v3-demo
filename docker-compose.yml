@@ -6,14 +6,18 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - .env.example
+      - .env
     environment:
       GIGAAM_CACHE: /data/gigaam
       DIAR_EMB_MODEL: /data/diar/embedding.onnx
       DIAR_SEG_MODEL: /data/diar/segmentation.onnx
+      DIAR_DIART_CACHE: /data/diart
+      HF_HOME: /data/diart
+      HUGGINGFACE_HUB_CACHE: /data/diart/hub
     volumes:
       - ./data/gigaam:/data/gigaam
       - ./data/diar:/data/diar
+      - ./data/diart:/data/diart
     deploy:
       resources:
         limits:

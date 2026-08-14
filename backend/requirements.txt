@@ -3,3 +3,20 @@ uvicorn[standard]==0.34.0
 python-multipart==0.0.20
 sherpa-onnx==1.12.35
 numpy==2.*
+# diart itself is installed with --no-deps (pins numpy<2, conflicts with gigaam)
+matplotlib>=3.3.3
+rx>=3.2.0
+scipy>=1.6.0
+einops>=0.3.0
+tqdm>=4.64.0
+pandas>=1.4.2
+pyannote.audio>=3.1.0
+pyannote.core>=5.0.0
+pyannote.database>=5.0.0
+pyannote.metrics>=3.2
+optuna>=2.10
+rich>=12.5.1
+requests>=2.31.0
+websocket-client>=0.58.0
+websocket-server>=0.6.4
+soundfile>=0.12.0

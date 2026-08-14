@@ -1,6 +1,8 @@
 data/gigaam/
 data/diar/
+data/diart/
 data/tmp/
+data/huggingface/
 *.wav
 *.webm
 .env

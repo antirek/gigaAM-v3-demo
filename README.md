@@ -14,8 +14,8 @@ chmod +x scripts/check-disk.sh
 | Что | Размер (ориентир) |
 |-----|-------------------|
 | Веса модели (checkpoint + tokenizer) | ~450 MB |
-| Docker image (PyTorch CPU + gigaam) | ~1.5–2 GB |
-| RAM при inference | 4–6 GB |
+| Docker image (PyTorch CPU + gigaam + diart) | ~2–3 GB |
+| RAM при inference | 4–6 GB (+0.3–1 GB для diart) |
 
 Кэш модели хранится **локально в проекте**: `./data/gigaam` (CDN Sber, не `~/.cache`).
 
@@ -29,6 +29,7 @@ docker image prune -a   # удалить неиспользуемые images (ч
 
 ```bash
 cp .env.example .env
+# для DIAR_BACKEND=diart добавьте DIAR_HF_TOKEN=... (gated pyannote)
 docker-compose up --build
 ```
 
@@ -38,22 +39,24 @@ docker-compose up --build
 
 ## API
 
-- `GET /health` — статус модели
+- `GET /health` — статус модели и `diarization.backend`
 - `POST /transcribe` — multipart file upload (webm/wav и др.)
 - `WebSocket /ws/stream` — pseudo-streaming (re-transcription буфера)
 
 ## Диаризация (только streaming)
 
-Как у [Charoite](https://github.com/charoiteai/Charoite_audio): не Silero VAD, а
-**pyannote segmentation + ERes2Net** через `sherpa-onnx`, до **2 спикеров**.
+Переключатель в `.env`: `DIAR_BACKEND=sherpa|diart|off` (дефолт **sherpa**).
 
-Модели лежат в `./data/diar/` (~44 MB). В UI: режим «Потоковый + диаризация» →
-метки `Спикер 1/2`.
+| Backend | Суть | Модели |
+|---------|------|--------|
+| `sherpa` | Charoite-like: pyannote-seg ONNX + ERes2Net | `./data/diar/` (~44 MB) |
+| `diart` | online pipeline [diart](https://github.com/juanmc2005/diart) + pyannote | HF cache `./data/diart/`, нужен `DIAR_HF_TOKEN` |
+| `off` | только ASR | — |
 
-- `transcribe`: до **25 с** на чанк; длинное аудио режется на 25-секундные фрагменты.
-- Макс. длина: **60 с** (`MAX_AUDIO_SECONDS`).
-- **Нативный streaming** в публичном inference API недоступен; UI — pseudo-streaming.
+В UI статус показывает `diar: sherpa` / `diar: diart`. Смена бэкенда — правка env + `docker-compose up -d`.
+
+Макс. **2 спикера**. Batch `/transcribe` без диаризации.
 
 ## Конфигурация
 
-См. `.env.example`: `MODEL_NAME`, `DEVICE`, `GIGAAM_CACHE`, `MAX_AUDIO_SECONDS`.
+См. `.env.example`: `MODEL_NAME`, `DEVICE`, `GIGAAM_CACHE`, `DIAR_BACKEND`, `MAX_AUDIO_SECONDS`.

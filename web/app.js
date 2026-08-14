@@ -66,11 +66,12 @@ async function pollHealth() {
     const data = await res.json();
     statusDot.className = "status-dot";
     diarReady = Boolean(data.diarization?.ready);
+    const backend = data.diarization?.backend || "off";
     const diarNote = diarReady
-      ? ` · diar: ${data.diarization.mode}, max ${data.diarization.max_speakers}`
+      ? ` · diar: ${backend}, max ${data.diarization.max_speakers}`
       : data.diarization?.error
-        ? ` · diar off: ${data.diarization.error}`
-        : " · diar off";
+        ? ` · diar ${backend}: ${data.diarization.error}`
+        : ` · diar ${backend}`;
 
     if (data.status === "ready") {
       statusDot.classList.add("ready");

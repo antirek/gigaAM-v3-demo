@@ -8,12 +8,16 @@ WORKDIR /app
 
 COPY backend/requirements.txt /app/requirements.txt
 
+ENV PIP_DEFAULT_TIMEOUT=120
+
+# Torch CPU first, then app deps. diart pins numpy<2 (conflicts with gigaam) → --no-deps.
 RUN pip install --no-cache-dir \
-    torch==2.8.0 torchaudio==2.8.0 \
+    torch==2.8.0 torchaudio==2.8.0 torchvision==0.23.0 \
     --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir \
     "gigaam @ git+https://github.com/salute-developers/GigaAM.git" \
-    -r requirements.txt
+    -r requirements.txt \
+    && pip install --no-cache-dir --no-deps diart==0.9.2
 
 COPY backend/app /app/app
 COPY web /app/web
